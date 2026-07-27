@@ -1,3 +1,16 @@
+> ### This is a fork: **fEMSA Quant**
+>
+> [Slots Gel Annotator](https://github.com/billy-ngo/slots-gel-annotator) by
+> Billy Ngo (MIT), with raw-intensity band extraction and apparent-Kd fitting
+> added on top. Everything documented below still works.
+>
+> * **Quantification guide → [`docs/femsa-quant.md`](docs/femsa-quant.md)**
+> * Commands are `femsa` and `femsa-fit` (not `slots`); the server runs on
+>   port **8063** so a stock Slots install on 8062 is unaffected.
+> * Auto-update is disabled — pull from `upstream` with git instead.
+
+---
+
 # Slots Gel Annotator
 
 A vector-native, browser-based tool for annotating gel-electrophoresis images and exporting publication-ready figures. Designed for working biologists: drag-and-drop a gel image, draw an analysis region, label your lanes with brackets and ladder bands, and export the result as an SVG (vector — editable in Illustrator, Inkscape, or Figma) or a PNG (raster).

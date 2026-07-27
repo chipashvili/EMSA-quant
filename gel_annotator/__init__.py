@@ -24,5 +24,8 @@ Public API: ``__version__``. Everything else is internal — clients
 should drive the tool through the ``slots`` CLI or the HTTP endpoints.
 """
 
-__version__ = "1.1.0"
-__app_name__ = "Slots Gel Annotator"
+# Base = the upstream Slots release this fork tracks; the local segment
+# after "+" is this fork's own revision. Bump the base on merge.
+__version__ = "1.1.0+femsa.1"
+__app_name__ = "fEMSA Quant (Slots fork)"
+__upstream__ = "https://github.com/billy-ngo/slots-gel-annotator"

@@ -1,5 +1,48 @@
 # Changelog
 
+## fEMSA Quant fork — 1.1.0+femsa.1
+
+Forked from Slots Gel Annotator 1.1.0. Upstream's changelog follows below.
+
+### Added
+- **Quantify panel** (`Q`). Measurement *rows* — horizontal stripes spanning
+  every lane — crossed with the existing lane grid to give one identically-sized
+  ROI per lane. Roles free / bound / other; several bound rows sum (supershifts).
+- **Per-species background rows.** Subtraction is `background mean × band pixel
+  count`, so the background stripe need not match the band's height. Warns when a
+  background row sits more than 2× its band's height away — on a simulated 15 nM
+  titration, a distant shared background returned 19.3 nM where per-band
+  backgrounds returned 14.0–16.1 nM.
+- **`POST /api/image/{id}/quantify`** — batched raw-pixel ROI integration.
+  Reads the native-dtype source array; takes no LUT parameters, so display
+  settings provably cannot affect a measurement.
+- **`POST /api/image/{id}/profile`** — raw vertical intensity profile.
+- **Two-signal saturation.** `sat_pixels` at the dtype ceiling plus
+  `plateau_pixels` at the image's own maximum, for 16-bit files written by 12- or
+  14-bit sensors that clip well below 65535.
+- **Protein concentrations in the lane table** via a `[Protein] nM` column.
+  Blank means "exclude this lane", never zero.
+- **CSV export** with ROI geometry, raw and net intensities, and saturation flags.
+- **`femsa-fit` CLI.** Exact 1:1 quadratic (default) plus hyperbolic and Hill;
+  both f_bound estimators (ratio and depletion) computed and compared;
+  per-replicate fits combined as a geometric mean with a log-scale 95% CI;
+  binding-curve and residual figures; a warnings section covering saturation,
+  estimator divergence, background over-subtraction, the depletion regime,
+  extrapolation, low fmax, and replicate count.
+- **43 tests** against a synthetic gel with a known Kd.
+
+### Changed
+- Port 8062 → **8063**; config dir `~/.slots-gel-annotator` → `~/.femsa-quant`;
+  commands `slots` / `gel-annotator` → `femsa` / `femsa-fit`. All so this fork
+  and a stock Slots install can run side by side.
+- **Auto-update disabled.** `pip install --upgrade slotsgeltool` would overwrite
+  `gel_annotator` with upstream's copy and delete the quantification layer.
+- Added `matplotlib` as a dependency (figure generation in `femsa-fit`).
+
+---
+
+# Upstream changelog (Slots Gel Annotator)
+
 All notable changes to Slots Gel Annotator are recorded here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).

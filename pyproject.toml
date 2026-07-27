@@ -3,15 +3,22 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "slotsgeltool"
-version = "1.1.0"
-description = "Slots Gel Annotator — vector-native gel annotation tool with publication-ready SVG / PNG export."
+name = "femsa-quant"
+# Upstream Slots version this fork is based on, plus a local segment.
+# Bump the base part when merging a new upstream release.
+version = "1.1.0+femsa.1"
+description = "fEMSA quantification — Slots Gel Annotator forked with raw-intensity band extraction and apparent-Kd fitting."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
 authors = [
-    {name = "Billy Ngo", email = "billy.ngo0108@gmail.com"},
+    {name = "Otto Chipashvili", email = "otto.chipashvili@yale.edu"},
 ]
+maintainers = [
+    {name = "Otto Chipashvili", email = "otto.chipashvili@yale.edu"},
+]
+# Upstream: Billy Ngo <billy.ngo0108@gmail.com>, MIT licensed.
+# https://github.com/billy-ngo/slots-gel-annotator
 keywords = [
     "gel",
     "electrophoresis",
@@ -23,6 +30,11 @@ keywords = [
     "SVG",
     "publication",
     "slots",
+    "EMSA",
+    "fEMSA",
+    "Kd",
+    "densitometry",
+    "curve-fitting",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -55,21 +67,25 @@ dependencies = [
     "fastapi>=0.111",
     "uvicorn[standard]>=0.29",
     "python-multipart>=0.0.9",
+    # Fork addition: femsa-fit renders the binding-curve and residual
+    # figures. Kept a hard dependency rather than an extra because the
+    # fitting CLI is half of what this fork is for — an install that
+    # cannot draw the curve is not a working install.
+    "matplotlib>=3.7",
 ]
 
 [project.scripts]
-# `slots` is the user-facing command — short, easy to type, brand-aligned.
-# `gel-annotator` is kept as an alias so anyone who knew the original
-# pre-rebrand command still gets to the same launcher; pyproject's
-# entry-point list lets us register both with a single binding.
-slots = "gel_annotator.cli:main"
-gel-annotator = "gel_annotator.cli:main"
+# Deliberately NOT `slots`: this fork installs into its own venv
+# alongside a stock slotsgeltool, and reusing the command name would
+# make which binary you get depend on PATH order.
+femsa = "gel_annotator.cli:main"
+femsa-fit = "gel_annotator.fit.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
 
 [project.urls]
-Homepage = "https://github.com/billy-ngo/slots-gel-annotator"
-Repository = "https://github.com/billy-ngo/slots-gel-annotator"
-Issues = "https://github.com/billy-ngo/slots-gel-annotator/issues"
-Changelog = "https://github.com/billy-ngo/slots-gel-annotator/blob/main/CHANGELOG.md"
+Upstream = "https://github.com/billy-ngo/slots-gel-annotator"
 
 [tool.setuptools.packages.find]
 include = ["gel_annotator*"]
@@ -84,4 +100,13 @@ gel_annotator = [
     "assets/*",
     "*.ico",
     "*.png",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = [
+    # starlette's TestClient still imports httpx; not our call to make.
+    "ignore::DeprecationWarning:starlette.*",
+    "ignore:Using `httpx` with `starlette.testclient`:UserWarning",
 ]

@@ -157,6 +157,12 @@ const state = {
   regionBorderWidth: 2,
   tickWidth: 2,
 
+  // fEMSA quantification. Owned entirely by quant.js — app.js only
+  // declares the slot so it participates in undo/redo, save/load, and
+  // the new-image reset alongside every other piece of state. See
+  // FEMSA.blankState() for the shape.
+  quant: null,
+
   // Undo/redo history. `history` is an array of { snapshot, label } entries
   // where each `snapshot` is a deep clone of all UNDOABLE_FIELDS at a point
   // in time. `historyIndex` points at the entry whose snapshot represents
@@ -182,6 +188,7 @@ const UNDOABLE_FIELDS = [
   "annotations", "labelOverrides",
   "regionBorderWidth", "tickWidth",
   "columnVisible", "showLaneNumbers",
+  "quant",
 ];
 
 // ── Common ladder presets ────────────────────────────────────────────
@@ -382,7 +389,7 @@ const NEEDS_IMAGE = [
   "draw-region-btn", "add-text-btn", "add-line-btn",
   "rotate-btn",
   "invert-btn", "saturation-btn", "crop-btn", "hide-ladders-btn",
-  "lut-btn", "options-btn",
+  "lut-btn", "options-btn", "quant-btn",
   // The hidden originals stay in the list so all existing toggle code
   // (which uses these IDs) keeps working — the dropdown items below
   // mirror their disabled state, and clicking a disabled hidden button
@@ -409,12 +416,15 @@ function setTool(t) {
   // region committed by the next pointerup.
   if (typeof drag !== "undefined" && drag) cancelDrag();
   state.tool = t;
-  document.body.classList.remove("tool-region", "tool-text", "tool-line", "tool-band");
+  document.body.classList.remove("tool-region", "tool-text", "tool-line", "tool-band", "tool-qrow");
   if (t) document.body.classList.add(`tool-${t}`);
   ["draw-region-btn", "add-text-btn", "add-line-btn"].forEach((id) => {
     const expect = { "draw-region-btn": "region", "add-text-btn": "text", "add-line-btn": "line" }[id];
     $(id).classList.toggle("toggle-on", t === expect);
   });
+  // Switching to any other tool disarms a pending fEMSA row placement,
+  // so the next click on the gel doesn't sweep out a phantom row.
+  if (window.FEMSA) FEMSA.syncTool(t);
   if (t) clearSelection();
 }
 
@@ -497,6 +507,7 @@ async function uploadImage(file) {
   state.ladderLabelDx = {}; state._editingBand = null;
   state.annotations = []; state.labelOverrides = {}; state.selected = null;
   state.hideLadders = false; state.satOverlayUrl = null;
+  if (window.FEMSA) FEMSA.resetForNewImage();
   // Saturation overlay is ON by default for every new upload — this is
   // what users expect when looking at a fresh gel: a quick visual cue
   // for which bands are clipped. (Previously only 8-bit images got
@@ -1178,6 +1189,11 @@ function rebuildTable() {
     tbody.appendChild(tr);
   }
   updateBandPanel();
+  // The quant panel's concentration-column picker and its results table
+  // both read from the metadata table, so any structural change here
+  // (column added / renamed / deleted, lane count changed) has to be
+  // reflected there too.
+  if (window.FEMSA) FEMSA.refreshPanel();
 }
 function thRaw(html) { const t = document.createElement("template"); t.innerHTML = html.trim(); return t.content.firstChild; }
 
@@ -1560,6 +1576,10 @@ function initTableHandlers() {
     if (!td) return;
     if (_cellEditSnap !== null && JSON.stringify(state.cells) !== _cellEditSnap) {
       commitHistory("Edit cell");
+      // A cell edit may have changed a protein concentration, which
+      // changes which lanes are included and every f_bound the quant
+      // panel shows. Cheap to refresh; wrong to leave stale.
+      if (window.FEMSA) FEMSA.refreshPanel();
     }
     _cellEditSnap = null;
   });
@@ -2291,6 +2311,12 @@ function renderAll() {
   const gelTopSvg    = state.region ? imgToSvgY(L, state.region.y) : L.marginTop;
   const gelBottomSvg = state.region ? imgToSvgY(L, state.region.y + state.region.h) : L.marginTop + L.cropH;
   const gelHeight    = gelBottomSvg - gelTopSvg;
+
+  // fEMSA quantification rows. Drawn after the gel + region outline so
+  // the measurement boxes sit visibly on top of the bands they
+  // integrate, but before the marquee so a selection drag still reads
+  // as the topmost thing on the canvas.
+  if (window.FEMSA) FEMSA.render(L, lanes, ink);
 
   // Marquee rectangle (live during multi-element selection drag). Drawn
   // last so it appears over annotations + labels. data-export-hide
@@ -3201,6 +3227,12 @@ svg.addEventListener("pointerdown", (evt) => {
     evt.preventDefault();
     return;
   }
+
+  // fEMSA row placement / move / resize. Claims the event only when the
+  // draw-row tool is armed or the pointer went down on one of its own
+  // elements, so every gesture below still behaves normally in quant
+  // mode. Returns true iff it took ownership.
+  if (window.FEMSA && FEMSA.onPointerDown(evt, ic)) return;
 
   // Region resize handle?
   if (evt.target.dataset && evt.target.dataset.handle && state.region) {
@@ -4769,6 +4801,11 @@ $("save-btn").addEventListener("click", () => {
     column_visible: state.columnVisible,
     show_lane_numbers: state.showLaneNumbers,
     bit_depth: state.bitDepth,
+    // Row geometry + concentrations + probe conc. Measured RESULTS are
+    // not saved — they're re-derived from the raw image in one click,
+    // and persisting them would let a stale number outlive the row that
+    // produced it.
+    quant: state.quant,
   };
   const blob = new Blob([JSON.stringify(proj, null, 2)], { type: "application/json" });
   download(blob, (state.filename.replace(/\.[^.]+$/, "") || "project") + ".gelproj.json");
@@ -4815,6 +4852,7 @@ $("load-input").addEventListener("change", async (e) => {
     state.ladderLabelDx = (proj.ladder_label_dx && typeof proj.ladder_label_dx === "object") ? proj.ladder_label_dx : {};
     state._editingBand = null;
     state.annotations = proj.annotations || []; state.labelOverrides = proj.label_overrides || {};
+    if (window.FEMSA) FEMSA.adoptSavedState(proj.quant);
     state.selectedLanes.clear(); state.selected = null;
     NEEDS_IMAGE.forEach((id) => $(id).disabled = false);
     $("lane-count").disabled = false; $("lane-minus").disabled = false; $("lane-plus").disabled = false;

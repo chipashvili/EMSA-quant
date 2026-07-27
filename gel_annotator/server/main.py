@@ -27,9 +27,10 @@ from fastapi.staticfiles import StaticFiles
 from PIL import Image
 from pydantic import BaseModel, Field
 
-from gel_annotator import __version__
+from gel_annotator import __app_name__, __version__
+from gel_annotator.server import quant as _quant
 
-app = FastAPI(title="Slots Gel Annotator", version=__version__)
+app = FastAPI(title=__app_name__, version=__version__)
 
 # In-memory image registry: { image_id: ImageRecord }. Adequate for a
 # single-user local desktop app; if we ever go multi-user, swap for a
@@ -488,6 +489,39 @@ def detect_bands(image_id: str, req: DetectBandsRequest) -> DetectBandsResponse:
     return DetectBandsResponse(bands=[DetectedBand(y=y) for y in band_ys])
 
 
+# ── fEMSA quantification ──────────────────────────────────────────────
+#
+# These two endpoints are the only path in the app that reads raw pixel
+# VALUES rather than deriving a picture from them. They deliberately do
+# not accept LUT parameters: see gel_annotator/server/quant.py for why.
+
+
+@app.post("/api/image/{image_id}/quantify", response_model=_quant.QuantResponse)
+def quantify_rois(image_id: str, req: _quant.QuantRequest) -> _quant.QuantResponse:
+    """Integrate raw intensity over a batch of ROIs.
+
+    Batched rather than one-ROI-per-request because a 12-lane titration
+    with a free row, a bound row, and two background rows is 48 ROIs —
+    48 round-trips would make the Measure button feel broken even on
+    loopback.
+    """
+    rec = _IMAGES.get(image_id)
+    if rec is None:
+        raise HTTPException(404, "Unknown image_id.")
+    if len(req.rois) > 4096:
+        raise HTTPException(400, f"Too many ROIs ({len(req.rois)}); limit is 4096.")
+    return _quant.quantify(rec.src, rec.raw_min, rec.raw_max, req)
+
+
+@app.post("/api/image/{image_id}/profile", response_model=_quant.ProfileResponse)
+def raw_profile(image_id: str, req: _quant.ProfileRequest) -> _quant.ProfileResponse:
+    """Vertical raw-intensity profile of a rectangle, for row placement."""
+    rec = _IMAGES.get(image_id)
+    if rec is None:
+        raise HTTPException(404, "Unknown image_id.")
+    return _quant.lane_profile(rec.src, req)
+
+
 # ── Health ────────────────────────────────────────────────────────────
 
 
@@ -549,6 +583,11 @@ def index() -> Response:
 @app.get("/app.js")
 def app_js() -> FileResponse:
     return FileResponse(_FRONTEND / "app.js", media_type="application/javascript")
+
+
+@app.get("/quant.js")
+def quant_js() -> FileResponse:
+    return FileResponse(_FRONTEND / "quant.js", media_type="application/javascript")
 
 
 @app.get("/style.css")

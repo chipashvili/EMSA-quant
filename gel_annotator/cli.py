@@ -43,17 +43,28 @@ from pathlib import Path
 # Per-user state directory. Holds the single-instance lock, the
 # version marker for first-run welcome, and the optional update log.
 # Created on demand.
-_CONFIG_DIR = Path.home() / ".slots-gel-annotator"
+# Fork note: config dir, lock file, and port all differ from upstream
+# Slots so this tool and a stock `slots` install can be running at the
+# same time without fighting over a lock file or a port. Changing any of
+# these back would make the two instances silently adopt each other's
+# server.
+_CONFIG_DIR = Path.home() / ".femsa-quant"
 _LOCK_FILE = _CONFIG_DIR / "server.lock"
 _FIRST_RUN_MARKER = _CONFIG_DIR / ".shortcut_prompted"
 _VERSION_MARKER = _CONFIG_DIR / ".installed_version"
 
-_PYPI_PACKAGE = "slotsgeltool"
-_DEFAULT_PORT = 8062
+# Auto-update is DISABLED in this fork. Upstream ships to PyPI as
+# `slotsgeltool`; a version check against that package would compare
+# apples to oranges and, on accept, `pip install --upgrade slotsgeltool`
+# would overwrite this fork's gel_annotator package with upstream's —
+# silently deleting the quantification layer. Pull upstream changes with
+# git instead:  git fetch upstream && git merge upstream/main
+_PYPI_PACKAGE = None
+_DEFAULT_PORT = 8063
 
 # Display name kept in one place so the printed banner, the desktop-
 # shortcut label, and the dialog titles all stay in lock-step.
-_APP_NAME = "Slots Gel Annotator"
+_APP_NAME = "fEMSA Quant (Slots fork)"
 
 
 # ── Welcome banner ───────────────────────────────────────────────────
@@ -132,6 +143,11 @@ def _get_pypi_version() -> str | None:
     a single GET. 3-second timeout — slow networks shouldn't block the
     user from opening their gel image.
     """
+    # Fork: no PyPI package to check against. Short-circuit rather than
+    # letting the request 404 — otherwise every launch pays the 3 s
+    # timeout to learn nothing.
+    if not _PYPI_PACKAGE:
+        return None
     try:
         import urllib.request
         url = f"https://pypi.org/pypi/{_PYPI_PACKAGE}/json"
@@ -157,6 +173,13 @@ def _do_upgrade() -> bool:
     fails (which happens on Linux with externally-managed Python or on
     macOS Homebrew installs). Returns True on success.
     """
+    # Fork: refuse outright. `pip install --upgrade slotsgeltool` would
+    # overwrite this fork's gel_annotator package with upstream's and
+    # take the quantification layer with it.
+    if not _PYPI_PACKAGE:
+        _log("  Auto-update is disabled in this fork. "
+             "Update with: git -C <repo> pull  (then reinstall if needed)")
+        return False
     cmds = [
         [sys.executable, "-m", "pip", "install", "--upgrade", _PYPI_PACKAGE],
         [sys.executable, "-m", "pip", "install", "--upgrade", "--user", _PYPI_PACKAGE],
@@ -688,6 +711,10 @@ def main() -> int:
         return 0
 
     if args.update:
+        if not _PYPI_PACKAGE:
+            print(f"  {_APP_NAME} is a git fork and is not distributed on PyPI.")
+            print("  Update it with:  git -C <repo> fetch upstream && git merge upstream/main")
+            return 0
         status, ver = check_and_update(force=True)
         if status == "updated":
             print(f"  {_APP_NAME} updated to {ver}.")

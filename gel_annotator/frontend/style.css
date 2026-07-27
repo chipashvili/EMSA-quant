@@ -699,3 +699,108 @@ body.inverted .tour-btn:hover { background: #3a3a42; border-color: #5cb1ff; }
 body.inverted .tour-btn.primary { background: #3d8be0; }
 body.inverted .tour-arrow.up { border-bottom-color: #1f1f25; }
 body.inverted .tour-arrow.down { border-top-color: #1f1f25; }
+
+/* ── fEMSA quantification panel ───────────────────────────────────── */
+/* Appended rather than interleaved with the upstream rules above: this
+ * fork tracks Slots releases, and an append-only block can never
+ * conflict on merge. Inherits .ladder-panel's frame + the .button and
+ * .hint styles; only the pieces with no existing analogue are new. */
+
+#quant-panel .q-block {
+  padding: 6px 0;
+  border-bottom: 1px solid #e4e4e4;
+}
+#quant-panel .q-block:last-of-type { border-bottom: none; }
+
+#quant-panel .q-btnrow { display: flex; gap: 5px; }
+#quant-panel .q-btnrow .button { flex: 1; padding: 5px 6px; font-size: 12px; }
+
+/* Row list — one line per measurement stripe. */
+#q-rows { margin-top: 6px; }
+#quant-panel .q-row {
+  display: flex; align-items: center; gap: 5px;
+  padding: 3px 4px; border-radius: 3px; font-size: 12px;
+}
+#quant-panel .q-row.sel { background: #e8f1fb; }
+#quant-panel .q-row select { font-size: 11px; padding: 1px 2px; width: auto; flex: 0 0 auto; }
+#quant-panel .q-row .q-name {
+  flex: 1 1 60px; min-width: 40px;
+  font-size: 12px; padding: 2px 4px;
+}
+#quant-panel .q-swatch {
+  flex: 0 0 auto; width: 10px; height: 10px; border-radius: 2px;
+}
+#quant-panel .q-geo { flex: 0 0 auto; font-size: 10px; color: #888; }
+#quant-panel .q-del {
+  flex: 0 0 auto; background: none; border: none; color: #c00;
+  cursor: pointer; font-size: 15px; line-height: 1; padding: 0 3px;
+}
+#quant-panel .q-del:hover { color: #800; }
+#quant-panel .q-empty { font-size: 11px; color: #999; padding: 4px 2px; line-height: 1.5; }
+
+/* Settings fields — label left, control right, one per line. */
+#quant-panel .q-field {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 3px 0;
+}
+#quant-panel .q-field > label { font-size: 11px; color: #555; flex: 0 0 auto; }
+#quant-panel .q-field input, #quant-panel .q-field select {
+  font-size: 12px; padding: 2px 4px; width: auto;
+}
+#quant-panel .q-inline { display: flex; align-items: center; gap: 4px; }
+#quant-panel .q-inline select { max-width: 110px; }
+#quant-panel .q-inline input[type=number] { width: 48px; text-align: right; }
+#quant-panel .q-inline .button { padding: 3px 8px; font-size: 11px; }
+#quant-panel .q-unit { font-size: 10px; color: #888; }
+#quant-panel .q-check {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 11px; color: #555; margin: 0; white-space: nowrap;
+}
+#quant-panel .q-check.q-standalone { padding-top: 4px; }
+
+/* Warnings. Three levels, because they carry very different weight:
+ * `err` means a number on screen is wrong or missing, `warn` means it
+ * may be biased, `info` is a methodological note (e.g. you are in the
+ * ligand-depletion regime — fit the quadratic). */
+#q-warnings { margin-top: 6px; }
+#quant-panel .q-warn {
+  font-size: 11px; line-height: 1.45; padding: 5px 7px;
+  margin-bottom: 4px; border-radius: 3px; border-left: 3px solid;
+}
+#quant-panel .q-warn.err  { background: #fdecea; border-color: #c0392b; color: #7b241c; }
+#quant-panel .q-warn.warn { background: #fef6e0; border-color: #d68910; color: #7d5109; }
+#quant-panel .q-warn.info { background: #eaf1f8; border-color: #3d8be0; color: #1a5276; }
+
+/* Results table. */
+#q-results { margin-top: 6px; }
+#quant-panel .q-results-table {
+  width: 100%; border-collapse: collapse; font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+#quant-panel .q-results-table th {
+  text-align: right; padding: 2px 4px; font-weight: 600;
+  color: #555; border-bottom: 1px solid #ddd; white-space: nowrap;
+}
+#quant-panel .q-results-table td {
+  text-align: right; padding: 2px 4px; border-bottom: 1px solid #f0f0f0;
+}
+#quant-panel .q-results-table th:first-child,
+#quant-panel .q-results-table td:first-child { text-align: left; }
+#quant-panel .q-results-table tr.q-out td { color: #aaa; }
+#quant-panel .q-flag { color: #c0392b; font-weight: 700; cursor: help; }
+#quant-panel .q-meta { font-size: 10px; color: #999; margin-top: 4px; }
+
+/* Row-placement cursor — matches the crosshair the other draw tools use. */
+body.tool-qrow #canvas-wrap { cursor: crosshair; }
+
+/* Inverted theme. */
+body.inverted #quant-panel .q-block { border-bottom-color: #444; }
+body.inverted #quant-panel .q-row.sel { background: #24384f; }
+body.inverted #quant-panel .q-field > label,
+body.inverted #quant-panel .q-check { color: #aaa; }
+body.inverted #quant-panel .q-results-table th { color: #bbb; border-bottom-color: #555; }
+body.inverted #quant-panel .q-results-table td { border-bottom-color: #3a3a42; }
+body.inverted #quant-panel .q-results-table tr.q-out td { color: #666; }
+body.inverted #quant-panel .q-warn.err  { background: #3d1f1c; color: #f0b4ac; }
+body.inverted #quant-panel .q-warn.warn { background: #3d3218; color: #f0d9a0; }
+body.inverted #quant-panel .q-warn.info { background: #1c2e40; color: #a9cdf0; }

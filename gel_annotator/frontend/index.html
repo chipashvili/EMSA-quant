@@ -38,6 +38,7 @@
   <button id="crop-btn" disabled title="Toggle: clip the displayed image to the analysis region (shortcut: C)">Crop to Region (C)</button>
   <button id="hide-ladders-btn" data-tour="hide-ladders" disabled title="Collapse the analysis region to exclude flank ladder lanes (shortcut: H)">Hide Ladders (H)</button>
   <button id="lut-btn" data-tour="lut" disabled title="Look-up table — adjust how raw pixel values map to display brightness">LUT (L)</button>
+  <button id="quant-btn" data-tour="quant" disabled title="fEMSA quantification — integrate raw band intensities and export a fit-ready CSV (shortcut: Q)">Quantify (Q)</button>
   <button id="options-btn" disabled title="Display defaults (shortcut: O)">Options (O)</button>
   <input type="number" id="top-font-size" class="top-input" min="6" max="120" step="1" disabled title="Font size of selected text/label" placeholder="Aa" />
   <input type="number" id="top-thickness" class="top-input" min="0.5" max="20" step="0.5" disabled title="Line thickness of selected line" placeholder="━" />
@@ -155,6 +156,75 @@
         label vertically to move it, or horizontally to shift all labels
         in the lane together. Marquee (drag on empty space) or Delete
         removes the selected band(s) and their tick marks.
+      </div>
+    </div>
+
+    <!-- ── fEMSA quantification panel ────────────────────────────────
+         Hidden until the Quantify toggle is on. Everything here is
+         driven by quant.js; app.js knows only that the panel exists. -->
+    <div id="quant-panel" class="ladder-panel" style="display:none">
+      <h4>fEMSA quantification</h4>
+
+      <div class="q-block">
+        <div class="q-btnrow">
+          <button class="button" id="q-add-free"  title="Drag across the free-probe band">+ Free row</button>
+          <button class="button" id="q-add-bound" title="Drag across the shifted complex">+ Bound row</button>
+          <button class="button" id="q-add-bg"    title="Drag across empty gel in the same lanes">+ Background</button>
+        </div>
+        <div id="q-rows"></div>
+      </div>
+
+      <div class="q-block">
+        <div class="q-field">
+          <label for="q-conc-col">[Protein] column</label>
+          <span class="q-inline">
+            <select id="q-conc-col" title="Metadata column holding the protein concentration in nM for each lane"></select>
+            <button class="button" id="q-new-conc-col" title="Create a [Protein] nM column in the lane table">New</button>
+          </span>
+        </div>
+        <div class="q-field">
+          <label for="q-probe">Probe [DNA] nM</label>
+          <input type="number" id="q-probe" step="any" min="0" value="8"
+                 title="Total probe concentration in the binding reaction (Dt). Recorded in the CSV and used by the quadratic fit." />
+        </div>
+        <div class="q-field">
+          <label for="q-replicate">Replicate</label>
+          <input type="text" id="q-replicate" value="1"
+                 title="Identifier for this biological replicate. Each replicate is fitted independently." />
+        </div>
+        <div class="q-field">
+          <label for="q-inset">ROI width</label>
+          <span class="q-inline">
+            <label class="q-check" title="Give every lane the same box width (the narrowest lane's). Required for the depletion method to be valid."><input type="checkbox" id="q-uniform" checked /> uniform</label>
+            <input type="number" id="q-inset" min="0" max="45" step="1" value="0" title="Shrink each box away from the lane edges, in percent" />
+            <span class="q-unit">% inset</span>
+          </span>
+        </div>
+        <label class="q-check q-standalone" title="ROI boxes are measurement scaffolding and are normally stripped from exports">
+          <input type="checkbox" id="q-export-rois" /> Show ROI boxes in PNG / SVG export
+        </label>
+      </div>
+
+      <div class="q-block q-btnrow">
+        <button class="button primary" id="q-measure" title="Integrate raw pixel values inside every box">Measure</button>
+        <button class="button" id="q-export-csv" disabled title="Export a fit-ready CSV">Export CSV</button>
+      </div>
+
+      <div id="q-warnings"></div>
+      <div id="q-results"></div>
+
+      <div class="hint">
+        <b>Rows.</b> A row is a horizontal stripe across every lane at one
+        height — crossing it with the lane grid gives one identically-sized
+        ROI per lane. Drag a row's middle to move it, its top or bottom edge
+        to resize. Several rows can be marked <i>bound</i> (supershifts); the
+        analysis sums them.<br>
+        <b>Background.</b> Place one over empty gel at a similar height to the
+        band. Subtraction is per-pixel (background mean × band pixel count),
+        so the background row does not have to be the same height.<br>
+        <b>Raw values only.</b> Every number comes from the source pixels, not
+        the LUT preview — changing brightness on screen cannot change a result.<br>
+        <b>Then fit.</b> <code>femsa-fit yourfile_quant.csv</code>
       </div>
     </div>
 
@@ -374,5 +444,9 @@
 <div id="tour-overlay" class="hidden" aria-hidden="true"></div>
 
 <script src="/app.js?v=20260629-bg-color"></script>
+<!-- Loaded after app.js: quant.js reads app.js's top-level bindings
+     (state, svg, computeLanes, renderAll, …) through the shared global
+     lexical scope of classic scripts. -->
+<script src="/quant.js?v=20260727-femsa"></script>
 </body>
 </html>
