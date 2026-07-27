@@ -328,15 +328,39 @@ def collect_warnings(
                     f"higher-concentration points."
                 )
 
-    # fmax well below 1.
+    # fmax out of physical range, in either direction.
     for mf in method_fits:
         f = mf.fits.get("quadratic")
-        if f and f.converged and "fmax" in f.params and f.params["fmax"] < 0.7:
+        if not (f and f.converged and "fmax" in f.params):
+            continue
+        fmax = f.params["fmax"]
+        if fmax < 0.7:
             w.append(
-                f"{mf.rep.name} [{mf.method}]: fitted fmax = {fmt(f.params['fmax'], 3)}, well "
+                f"{mf.rep.name} [{mf.method}]: fitted fmax = {fmt(fmax, 3)}, well "
                 f"below 1. Part of the probe never shifts. Usual causes are inactive or "
                 f"aggregated protein, damaged or partially unlabelled probe, or a bound "
                 f"ROI that is missing part of the complex."
+            )
+        elif fmax > 1.05:
+            # A plateau above 1 is not a physical result — fraction bound
+            # is a fraction. When curve_fit lands here it is using fmax as
+            # a shape parameter to steepen a curve the 1:1 model cannot
+            # otherwise match, and Kd inflates along with it. The honest
+            # readings are the Hill fit (which has a real steepness
+            # parameter) and a refit with fmax pinned.
+            railed = fmax >= 1.49
+            hill = mf.fits.get("hill")
+            nh = hill.params.get("n") if (hill and hill.converged) else None
+            w.append(
+                f"{mf.rep.name} [{mf.method}]: fitted fmax = {fmt(fmax, 3)}"
+                + (" — pinned against the upper bound" if railed else "")
+                + ". Fraction bound cannot exceed 1, so this is not a plateau, it is the "
+                  "fitter stretching the curve to match data that rises more steeply than "
+                  "a 1:1 isotherm allows. Kd is inflated by the same distortion"
+                + (f" (the Hill fit puts n at {fmt(nh, 3)}, i.e. genuinely steeper than "
+                   f"hyperbolic). " if nh else ". ")
+                + "Re-run with --fmax 1.0 for an honest Kd, and quote the Hill fit if the "
+                  "steepness is real."
             )
 
     # Hill coefficient.
@@ -457,6 +481,28 @@ def make_figure(
         ax.plot(grid, curve, "-", color="0.15", lw=2.0, zorder=5,
                 label=f"{primary_model}: Kd = {fmt(s.geometric_mean)} nM")
         ax.axvline(s.geometric_mean, color="0.15", lw=0.8, ls=":", alpha=0.6, zorder=1)
+
+        # Overlay the Hill fit when the 1:1 model visibly fails to
+        # describe the curve's steepness. A titration that rises faster
+        # than a 1:1 isotherm makes the quadratic trade Kd against fmax,
+        # and a figure showing only the quadratic hides that the model —
+        # not the data — is what is off. The 0.02 R^2 margin keeps this
+        # from firing on fits that are effectively tied.
+        sh = summaries.get(("ratio", "hill"))
+        hills = [mf.fits["hill"] for mf in ratio_fits
+                 if "hill" in mf.fits and mf.fits["hill"].converged]
+        prims = [mf.fits[primary_model] for mf in ratio_fits
+                 if primary_model in mf.fits and mf.fits[primary_model].converged]
+        if sh and sh.n and hills and prims:
+            r2_hill = float(np.mean([f.r_squared for f in hills]))
+            r2_prim = float(np.mean([f.r_squared for f in prims]))
+            if r2_hill > r2_prim + 0.02:
+                from gel_annotator.fit.models import hill as _hill
+                nh = float(np.mean([f.params.get("n", 1.0) for f in hills]))
+                fh = float(np.mean([f.params.get("fmax", 1.0) for f in hills]))
+                ax.plot(grid, _hill(grid, sh.geometric_mean, fh, nh), "--",
+                        color="#c8502d", lw=1.8, zorder=6,
+                        label=f"Hill (n = {fmt(nh, 3)}): Kd = {fmt(sh.geometric_mean)} nM")
 
     if has_zero:
         # Break marker between the pseudo-zero position and the real axis.
