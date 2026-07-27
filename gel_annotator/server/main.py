@@ -15,6 +15,7 @@ Explicitly NOT responsible for:
 from __future__ import annotations
 
 import io
+import re
 import time
 import uuid
 from pathlib import Path
@@ -558,6 +559,32 @@ if _FRONTEND.exists():
     app.mount("/static", StaticFiles(directory=_FRONTEND), name="static")
 
 
+def _asset_tag(name: str) -> str:
+    """Short content-derived cache-buster for a frontend asset.
+
+    Upstream hand-maintains the ``?v=`` strings on the <script> and
+    <link> tags in index.html. That is a footgun: edit app.js or
+    quant.js without also editing the version string, and every browser
+    that has the page cached keeps running the OLD file. The failure is
+    silent and looks exactly like a broken feature — the button is
+    there, the click does nothing, and the source on disk is correct.
+
+    Hashing size + mtime means the tag changes whenever the file does,
+    with no bookkeeping. Falls back to the package version if the file
+    is missing so a stale tag can never 500 the page.
+    """
+    try:
+        stat = (_FRONTEND / name).stat()
+        seed = f"{name}:{stat.st_size}:{stat.st_mtime_ns}"
+    except OSError:
+        return __version__
+    import hashlib
+    return hashlib.sha1(seed.encode()).hexdigest()[:10]
+
+
+_ASSET_RE = re.compile(r'(?P<attr>href|src)="/(?P<file>app\.js|quant\.js|style\.css)\?v=[^"]*"')
+
+
 @app.get("/")
 def index() -> Response:
     """Serve the single-page frontend with the running version injected.
@@ -567,8 +594,15 @@ def index() -> Response:
     matches whatever's installed RIGHT NOW (not whatever was current at
     the time the HTML was written). Cheap regex-style insertion — the
     HTML never contains the literal token outside this site.
+
+    Asset ``?v=`` tags are rewritten from file content on the way out —
+    see :func:`_asset_tag`.
     """
     html = (_FRONTEND / "index.html").read_text(encoding="utf-8")
+    html = _ASSET_RE.sub(
+        lambda m: f'{m.group("attr")}="/{m.group("file")}?v={_asset_tag(m.group("file"))}"',
+        html,
+    )
     inject = (
         f'<script>window.SLOTS_VERSION = "{__version__}";</script>'
     )

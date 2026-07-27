@@ -225,6 +225,38 @@ Header matching is case- and punctuation-insensitive: `Protein (nM)`,
 
 ---
 
+## Troubleshooting
+
+**"Quantify does nothing when I click it or press Q."** Two causes, both fixed,
+but worth knowing:
+
+* *No image open.* Quantify measures pixels, so it is inert until you load one.
+  The button is greyed out and `Q` now says so in the status bar instead of
+  failing silently.
+* *The panel opened below the fold.* The sidebar scrolls, and the metadata table
+  above the panel grows with the lane count — past ~16 lanes the panel opened
+  off-screen and the button appeared dead. Activating Quantify now scrolls the
+  panel into view, the panel's own help is collapsed by default, and the long
+  table hint is hidden while quantifying.
+
+**A change to the UI doesn't show up.** Asset `?v=` tags are derived from file
+content, so a browser cannot serve a stale `app.js` / `quant.js` / `style.css`.
+If you edited a file and see no change, you are probably talking to a different
+server — check the port. `femsa` falls back to 8064, 8065, … when 8063 is busy,
+and prints the URL it actually bound.
+
+**"Already running at http://localhost:80xx".** A previous instance holds
+`~/.femsa-quant/server.lock`. Either use the URL it prints, or stop the old one:
+
+```bash
+lsof -ti tcp:8063 | xargs kill && rm -f ~/.femsa-quant/server.lock
+```
+
+Note `pkill -f gel_annotator` does *not* match it — the process command line is
+`.venv/bin/femsa`.
+
+---
+
 ## Tests
 
 ```bash

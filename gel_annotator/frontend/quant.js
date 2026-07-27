@@ -789,12 +789,50 @@ function setActive(on) {
   q.active = on;
   $("quant-btn").classList.toggle("toggle-on", on);
   if (!on && state.tool === "qrow") setTool(null);
+  // The sidebar scrolls, and the quant panel sits below the metadata
+  // table — which is as tall as the lane count. At 12 lanes the panel
+  // already starts ~590 px down a ~930 px sidebar; past ~16 lanes, or
+  // with a couple of metadata columns, it opens entirely below the fold.
+  // Without this the button lights up and the panel becomes visible in
+  // the DOM, but the user sees nothing happen and reasonably concludes
+  // the button is broken.
+  document.body.classList.toggle("quant-active", on);
   renderAll(); refreshPanel();
   if (on) {
+    revealPanel();
     setStatus(state.region
       ? "Quantify mode. Add a free row and a bound row, then Measure."
       : "Quantify mode. Draw an analysis region first (D), then add rows.");
   }
+}
+
+/** Scroll the sidebar so the quant panel is actually on screen.
+ *
+ *  Two things this deliberately does NOT do:
+ *
+ *  • `scrollIntoView({behavior:"smooth"})` — the animation is queued
+ *    against the layout as it stands, and setActive() has just changed
+ *    that layout twice (the panel appeared, the table hint vanished).
+ *    The queued scroll gets dropped and nothing moves.
+ *
+ *  • `requestAnimationFrame` to wait for layout — rAF does not fire
+ *    while `document.hidden` is true. A page that loaded in a
+ *    background tab, or an embedded webview the OS thinks is occluded,
+ *    would never scroll. Reading getBoundingClientRect already forces a
+ *    synchronous layout flush, so the measurements below are current
+ *    without deferring at all.
+ *
+ *  No-ops when the panel is already fully visible, so re-entering quant
+ *  mode doesn't yank a view the user has deliberately scrolled. */
+function revealPanel() {
+  const panel = $("quant-panel");
+  const aside = document.getElementById("sidebar");
+  if (!panel || !aside || getComputedStyle(panel).display === "none") return;
+  const pr = panel.getBoundingClientRect();
+  const ar = aside.getBoundingClientRect();
+  if (pr.top >= ar.top && pr.bottom <= ar.bottom) return;   // already visible
+  // 8 px of breathing room above the panel's heading.
+  aside.scrollTop += pr.top - ar.top - 8;
 }
 
 function armRow(kind, role) {
@@ -808,10 +846,19 @@ function armRow(kind, role) {
 }
 
 function initPanel() {
-  $("quant-btn").addEventListener("click", () => {
-    if (!state.imageId) return;
+  // Shared by the button and the Q shortcut. The shortcut cannot just
+  // forward to button.click(): a disabled button swallows dispatched
+  // clicks silently, so pressing Q before opening an image would do
+  // nothing and say nothing.
+  function toggleQuant() {
+    if (!state.imageId) {
+      setStatus("Open a gel image first — Quantify measures raw pixels, so it needs one.", true);
+      return;
+    }
     setActive(!st().active);
-  });
+  }
+
+  $("quant-btn").addEventListener("click", toggleQuant);
 
   $("q-add-free").addEventListener("click",  () => armRow("signal", "free"));
   $("q-add-bound").addEventListener("click", () => armRow("signal", "bound"));
@@ -899,11 +946,10 @@ function initPanel() {
   // registers for the other toolbar buttons.
   document.addEventListener("keydown", (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
-    if (!state.imageId) return;
     const t = e.target;
     if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
     if (state.pendingTextAnn) return;
-    if (e.key === "q" || e.key === "Q") { e.preventDefault(); $("quant-btn").click(); }
+    if (e.key === "q" || e.key === "Q") { e.preventDefault(); toggleQuant(); }
   });
 }
 

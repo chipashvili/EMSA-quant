@@ -804,3 +804,25 @@ body.inverted #quant-panel .q-results-table tr.q-out td { color: #666; }
 body.inverted #quant-panel .q-warn.err  { background: #3d1f1c; color: #f0b4ac; }
 body.inverted #quant-panel .q-warn.warn { background: #3d3218; color: #f0d9a0; }
 body.inverted #quant-panel .q-warn.info { background: #1c2e40; color: #a9cdf0; }
+
+/* Quantify panel: keep it reachable in a scrolling sidebar.
+ *
+ * The sidebar's height is fixed but the metadata table grows with the
+ * lane count, so the quant panel — last in the column — is pushed
+ * further down every lane you add. Two mitigations, on top of the
+ * scrollIntoView() in setActive():
+ *   1. The long table hint above is hidden while quantifying. It
+ *      explains the table, which the user has already filled in by the
+ *      time they open this panel, and it costs ~165 px.
+ *   2. The panel's own help is a collapsed <details>. */
+body.quant-active #sidebar > .hint { display: none; }
+
+#quant-panel .q-help { margin-top: 6px; }
+#quant-panel .q-help > summary {
+  cursor: pointer; font-size: 11px; color: #666;
+  padding: 2px 0; user-select: none; list-style-position: inside;
+}
+#quant-panel .q-help > summary:hover { color: #333; }
+#quant-panel .q-help .hint { margin-top: 2px; }
+body.inverted #quant-panel .q-help > summary { color: #999; }
+body.inverted #quant-panel .q-help > summary:hover { color: #ddd; }

@@ -134,3 +134,57 @@ def test_roi_limit_rejected(client, uploaded):
     iid = uploaded["image_id"]
     rois = [{"id": str(i), "x": 0, "y": 0, "w": 2, "h": 2} for i in range(4097)]
     assert client.post(f"/api/image/{iid}/quantify", json={"rois": rois}).status_code == 400
+
+
+# ── Frontend asset delivery ───────────────────────────────────────────
+
+
+def test_index_serves_all_three_assets(client):
+    html = client.get("/").text
+    for asset in ("/style.css", "/app.js", "/quant.js"):
+        assert asset in html, f"{asset} missing from index.html"
+    for path in ("/style.css", "/app.js", "/quant.js"):
+        r = client.get(path)
+        assert r.status_code == 200 and len(r.content) > 0, path
+
+
+def test_asset_cache_tags_follow_file_content(client, monkeypatch):
+    """Upstream hand-maintains the ?v= strings on the script/link tags.
+    Editing quant.js without also editing its version string left every
+    browser with the page cached running the OLD file — a silent failure
+    that looks exactly like a broken feature. Tags are now derived from
+    the file, so this cannot recur."""
+    import re as _re
+    from gel_annotator.server import main as _main
+
+    def tags(html):
+        return dict(_re.findall(r'/(app\.js|quant\.js|style\.css)\?v=([^"]+)', html))
+
+    before = tags(client.get("/").text)
+    assert set(before) == {"app.js", "quant.js", "style.css"}
+    # A hand-written literal would still be sitting there unchanged.
+    assert all(v not in ("", "20260629-bg-color") for v in before.values())
+
+    # Same bytes -> same tags (no spurious cache misses on every request).
+    assert tags(client.get("/").text) == before
+
+    # Changed file -> changed tag.
+    real_stat = (_main._FRONTEND / "quant.js").stat()
+
+    class Bumped:
+        st_size = real_stat.st_size + 1
+        st_mtime_ns = real_stat.st_mtime_ns + 1_000_000
+
+    orig = _main._asset_tag
+
+    def patched(name):
+        if name == "quant.js":
+            import hashlib
+            seed = f"{name}:{Bumped.st_size}:{Bumped.st_mtime_ns}"
+            return hashlib.sha1(seed.encode()).hexdigest()[:10]
+        return orig(name)
+
+    monkeypatch.setattr(_main, "_asset_tag", patched)
+    after = tags(client.get("/").text)
+    assert after["quant.js"] != before["quant.js"], "edited asset must get a new tag"
+    assert after["app.js"] == before["app.js"], "untouched asset must keep its tag"

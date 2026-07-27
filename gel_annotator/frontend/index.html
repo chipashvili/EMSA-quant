@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="icon" type="image/x-icon" href="/favicon.ico" />
 <link rel="icon" type="image/png" sizes="192x192" href="/favicon.png" />
-<link rel="stylesheet" href="/style.css?v=20260629-bg-color" />
+<link rel="stylesheet" href="/style.css?v=20260727-femsa" />
 </head>
 <body>
 
@@ -213,19 +213,28 @@
       <div id="q-warnings"></div>
       <div id="q-results"></div>
 
-      <div class="hint">
-        <b>Rows.</b> A row is a horizontal stripe across every lane at one
-        height — crossing it with the lane grid gives one identically-sized
-        ROI per lane. Drag a row's middle to move it, its top or bottom edge
-        to resize. Several rows can be marked <i>bound</i> (supershifts); the
-        analysis sums them.<br>
-        <b>Background.</b> Place one over empty gel at a similar height to the
-        band. Subtraction is per-pixel (background mean × band pixel count),
-        so the background row does not have to be the same height.<br>
-        <b>Raw values only.</b> Every number comes from the source pixels, not
-        the LUT preview — changing brightness on screen cannot change a result.<br>
-        <b>Then fit.</b> <code>femsa-fit yourfile_quant.csv</code>
-      </div>
+      <!-- Collapsed by default. The sidebar scrolls and the metadata table
+           above grows with the lane count, so an always-open help block
+           here pushes the controls that matter off-screen. -->
+      <details class="q-help">
+        <summary>How rows work</summary>
+        <div class="hint">
+          <b>Rows.</b> A row is a horizontal stripe across every lane at one
+          height — crossing it with the lane grid gives one identically-sized
+          ROI per lane. Drag a row's middle to move it, its top or bottom edge
+          to resize. Several rows can be marked <i>bound</i> (supershifts); the
+          analysis sums them.<br>
+          <b>Background.</b> Put one just above or below each band and point it
+          at that band. Distance matters more than you would expect: gel
+          background usually has a vertical gradient, and on a simulated 15 nM
+          titration a single distant background row returned 19.3 nM where
+          per-band rows returned 14–16 nM. Subtraction is per-pixel (background
+          mean × band pixel count), so the row need not match the band's height.<br>
+          <b>Raw values only.</b> Every number comes from the source pixels, not
+          the LUT preview — changing brightness on screen cannot change a result.<br>
+          <b>Then fit.</b> <code>femsa-fit yourfile_quant.csv</code>
+        </div>
+      </details>
     </div>
 
     <div id="selection-panel" class="ladder-panel" style="display:none">
@@ -443,7 +452,7 @@
      div that we paint with spotlight strips + a card on each step. -->
 <div id="tour-overlay" class="hidden" aria-hidden="true"></div>
 
-<script src="/app.js?v=20260629-bg-color"></script>
+<script src="/app.js?v=20260727-femsa"></script>
 <!-- Loaded after app.js: quant.js reads app.js's top-level bindings
      (state, svg, computeLanes, renderAll, …) through the shared global
      lexical scope of classic scripts. -->
