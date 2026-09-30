@@ -237,7 +237,12 @@ def fit_model(
             # is always positive and multiplicatively symmetric, which is
             # also how the across-replicate summary is computed.
             rel = s / v
-            ci[name] = (v * float(np.exp(-tc * rel)), v * float(np.exp(tc * rel)))
+            # A fit that leaves Kd undetermined (a titration that never
+            # leaves baseline) has a relative SE in the hundreds, and the
+            # upper limit overflows to inf. That IS the right answer — the
+            # interval is unbounded — so suppress the warning, keep the inf.
+            with np.errstate(over="ignore"):
+                ci[name] = (v * float(np.exp(-tc * rel)), v * float(np.exp(tc * rel)))
         else:
             ci[name] = (v - tc * s, v + tc * s)
     if not float_fmax:

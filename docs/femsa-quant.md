@@ -67,7 +67,9 @@ measured number** — there is a test asserting exactly that
    table. Type one concentration per lane. Leave a cell blank to exclude that
    lane (a blank is *not* read as 0 — a real no-protein control and a missing
    value are different things).
-7. Set **Probe [DNA] nM** (`Dt`, 8 for the current assay) and a **Replicate** id.
+7. Set **Probe [DNA] nM** (`Dt`, 8 for the current assay), the **Fragment** this gel
+   titrates (`WT`, `-10 shuffle`, …) and a **Replicate** id. The fragment name is
+   what lets `femsa-fit` compare fragments later — see [Comparing fragments](#comparing-fragments).
 8. **Measure**, read the warnings, then **Export CSV**.
 
 Rows are draggable: grab the middle to move, the top or bottom edge to resize.
@@ -132,7 +134,7 @@ exposures and quantify each species from the one in range. `femsa-fit
 One row per (lane, signal row):
 
 ```
-image, replicate, lane, lane_label, protein_conc_nM, probe_nM, species, row_name,
+image, fragment, replicate, lane, lane_label, protein_conc_nM, probe_nM, species, row_name,
 roi_x, roi_y, roi_w, roi_h, n_pixels,
 integrated_intensity, bg_intensity, net_integrated_intensity,
 mean_intensity, bg_mean, max_value, sat_pixels, plateau_pixels, saturated,
@@ -209,7 +211,7 @@ non-equilibrium run effects. It describes curve shape, not mechanism.
 Saturated ROIs in the fit · ratio/depletion divergence · negative f_bound at low
 protein (background over-subtraction) · no 0 nM lane · Kd within 10× of Dt ·
 Kd extrapolated outside the titrated range · fmax well below 1 · Hill n
-significantly above 1 · fewer than 3 independent replicates · non-convergence.
+significantly above 1 · fewer than 3 independent replicates · non-convergence · fmax railing above 1.
 
 ### Other input formats
 
@@ -222,6 +224,108 @@ The fitter is not tied to this app's export. It also reads:
 
 Header matching is case- and punctuation-insensitive: `Protein (nM)`,
 `protein_conc_nM` and `[Protein] nM` all resolve, as do `1,000` and `1000 nM`.
+
+---
+
+## Comparing fragments
+
+The specificity arm — WT vs a scrambled or shuffled motif — ends in one figure:
+apparent Kd per fragment.
+
+### 1. Name the fragment on every gel
+
+Type it in the **Fragment** field before exporting. It goes into the CSV's
+`fragment` column and into the filename:
+
+```
+FLUORO_..._raw_WT_rep1_quant.csv
+FLUORO_..._raw_-10_shuffle_rep1_quant.csv
+```
+
+Use the same spelling every time (`-10 shuffle`, not `-10 shuffle` on one gel and
+`-10shuf` on the next) — replicates are grouped by exact name.
+
+### 2. Fit them all at once
+
+```bash
+femsa-fit *_quant.csv --fmax 1.0
+```
+
+Every replicate is still fitted on its own; replicates are then grouped by
+fragment, and because two or more fragments are present you also get:
+
+| File | |
+|---|---|
+| `femsa_compare.png` / `.svg` | the comparison figure |
+| `femsa_compare.csv` | Kd, 95% CI, fold change vs reference, per-replicate values |
+| `femsa_<fragment>_fit.png` | each fragment's binding curve |
+| `femsa_fit_report.txt` | a FRAGMENT COMPARISON table, then a full report per fragment |
+
+For older CSVs that have no fragment column, name them on the command line:
+`femsa-fit WT=old_rep1.csv "-10 shuffle=old_m10.csv"`. Filenames and labels that
+start with `-` are fine — the tool does not mistake them for options.
+
+| Option | |
+|---|---|
+| `--reference NAME` | what fold changes are relative to (default: `WT` if present, else the first fragment) |
+| `--style bar` / `dot` | bars on a linear axis from zero (default), or points on a log axis |
+| `--compare-model` | `quadratic` (default), `hill`, or `hyperbolic` |
+| `--compare-method` | `ratio` (default) or `depletion` |
+| `--title` | figure title |
+
+### Reading the figure
+
+**Lower Kd = tighter binding.** Kd is a dissociation constant, so it runs
+opposite to affinity: if the motif matters, WT has the *smallest* Kd and the
+shuffles come out larger. The y-axis says this, and every fold change is written
+with its direction (`3.6× weaker`), never as a bare ratio.
+
+Each fragment shows its replicates as points, the geometric mean as a bar (or a
+heavy line in `dot` style), and the 95% CI of that mean as whiskers.
+
+**Use `dot` when fragments differ by more than ~10×.** Kd is log-normal. On a
+linear axis a 40 nM WT becomes a sliver next to a 2 µM mutant and its error bar
+disappears. Bars are never drawn on a log axis, because a bar's length only means
+something against a zero baseline.
+
+### Fragments that barely bind
+
+A shuffled motif may shift only a little probe within the titration. A curve
+that never reaches its midpoint does not determine a Kd, and fitting one anyway
+fails in two ways:
+
+* an **extrapolated** Kd, with a CI spanning orders of magnitude, that wrecks the
+  axis for everything else; or
+* with `fmax` floating, the **low-plateau trap**: a curve that creeps up to
+  f ≈ 0.3 gets fit as "saturates early at 30%" — a *small* Kd that makes the
+  shuffle look as tight as WT. On simulated replicates scattered around a true
+  Kd of 900 nM, one fit to 162 nM this way (fmax 0.32).
+
+So each replicate is classified before it is plotted. If f_bound never reaches 0.5
+**and** the fit had to extrapolate Kd past the data or invent a plateau below 0.7,
+it is reported as a **lower bound** — `Kd > 250 nM`, the top concentration tested
+— and drawn as a hollow bar with an arrow and open triangles, never as a
+measurement. A curve that stops just short of 0.5 but fits a normal plateau with
+Kd inside the range is still a measurement: censoring it would print a false
+bound.
+
+When some replicates of a fragment are bounds, the geometric mean is unknown but
+a bound on it is not: substituting each bound for its unknown value gives a number
+the true geometric mean can only exceed. That is what the figure shows, labelled
+`>`, with no CI.
+
+**If a fragment comes out as a bound, extend its titration** — higher protein
+concentrations until it half-saturates — if you need the number rather than the
+inequality. For a specificity claim, `> 5× weaker than WT` is often enough.
+
+### Pin fmax when comparing
+
+Floating fmax lets each fragment trade Kd against its plateau independently, so
+differences in the fit, not the binding, can show up as differences in Kd. On
+a real titration, floating fmax railed at its 1.5 bound and more than doubled
+the fitted Kd relative to fmax pinned at 1.
+Same protein prep and same probe means the same maximum shift, so compare with
+`--fmax 1.0` unless the WT titration clearly plateaus below 1.
 
 ---
 
@@ -263,8 +367,8 @@ Note `pkill -f gel_annotator` does *not* match it — the process command line i
 ./.venv/bin/python -m pytest
 ```
 
-43 tests. The fixture is a synthetic gel with a **known** Kd and a deliberate
-background gradient — checks are against ground truth, not golden files, so a
+68 tests. The fixtures are synthetic gels and titrations with **known** Kd values
+(and a deliberate background gradient) — checks are against ground truth, not golden files, so a
 regression fails for the right reason.
 
 ---
@@ -275,7 +379,7 @@ regression fails for the right reason.
 |---|---|
 | `gel_annotator/server/quant.py` | new — ROI integration, saturation, lane profile |
 | `gel_annotator/frontend/quant.js` | new — the entire Quantify panel |
-| `gel_annotator/fit/` | new — binding models, CSV ingestion, report, CLI |
+| `gel_annotator/fit/` | new — binding models, CSV ingestion, report, CLI, fragment comparison |
 | `tests/` | new |
 | `server/main.py` | +3 routes, 1 import |
 | `frontend/app.js` | 8 hook points, ~20 lines total |

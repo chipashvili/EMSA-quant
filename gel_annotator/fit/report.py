@@ -53,14 +53,18 @@ def build_report(
     probe_nm: float,
     warnings: list[str],
     sources: list[Path],
+    fragment: str = "",
+    footer: bool = True,
 ) -> str:
     L: list[str] = []
     add = L.append
 
     add(_rule("="))
-    add("fEMSA apparent-Kd fit")
+    add(f"fEMSA apparent-Kd fit — {fragment}" if fragment else "fEMSA apparent-Kd fit")
     add(_rule("="))
     add("")
+    if fragment:
+        add(f"Fragment:         {fragment}")
     add(f"Input:            {', '.join(p.name for p in sources)}")
     add(f"Probe conc (Dt):  {fmt(probe_nm)} nM")
     reps = sorted({mf.rep.name for mf in method_fits})
@@ -182,29 +186,31 @@ def build_report(
             add(f"    {line}")
         add("")
 
-    add(_rule("="))
-    add("CARRY INTO THE MANUSCRIPT")
-    add(_rule("="))
-    add("")
-    for line in _wrap(
+    if footer:
+        L.extend(manuscript_notes())
+
+    return "\n".join(L) + "\n"
+
+
+def manuscript_notes() -> list[str]:
+    """Caveats that belong with any Kd from this assay, fragment or not."""
+    L = [_rule("="), "CARRY INTO THE MANUSCRIPT", _rule("="), ""]
+    for para in (
         "Apparent Kd is only as good as the ACTIVE protein concentration. "
         "Misfolded or aggregated protein makes the true Kd tighter than "
         "measured, and no curve fitting corrects for it. Bound it with an A280 "
         "aggregation check and a stoichiometric titration at high DNA, where "
-        "the equivalence point reports the active fraction.", 72):
-        add(f"  {line}")
-    add("")
-    for line in _wrap(
+        "the equivalence point reports the active fraction.",
         "Pair the affinity with specificity controls on the same footing: the "
         "same titration against a scrambled or point-mutated motif probe, plus "
         "cold competition (specific vs nonspecific competitor) for a Ki. The "
         "mutant-probe Kd alongside the WT Kd is what answers whether the "
         "binding is motif-specific rather than general affinity for "
-        "promoter-proximal DNA.", 72):
-        add(f"  {line}")
-    add("")
-
-    return "\n".join(L) + "\n"
+        "promoter-proximal DNA.",
+    ):
+        L.extend(f"  {line}" for line in _wrap(para, 72))
+        L.append("")
+    return L
 
 
 def _wrap(text: str, width: int) -> list[str]:
@@ -396,6 +402,7 @@ def make_figure(
     probe_nm: float,
     primary_model: str = "quadratic",
     show_depletion: bool = True,
+    label: str = "",
 ):
     """Binding curve + residuals. Protein on a log axis, per the spec."""
     import matplotlib
@@ -516,7 +523,11 @@ def make_figure(
     ax.axhline(0, color="0.8", lw=0.8, zorder=0)
     ax.axhline(1, color="0.8", lw=0.8, zorder=0)
     ax.legend(fontsize=8, frameon=False, loc="upper left")
-    ax.set_title(f"fEMSA titration — apparent Kd  (Dt = {fmt(probe_nm)} nM probe)", fontsize=10)
+    ax.set_title(
+        (f"{label} — " if label else "fEMSA titration — ")
+        + f"apparent Kd  (Dt = {fmt(probe_nm)} nM probe)",
+        fontsize=10,
+    )
 
     axr.axhline(0, color="0.4", lw=0.9)
     axr.set_ylabel("resid.", fontsize=9)

@@ -81,6 +81,7 @@ function blankState() {
     insetPct: 0,
     concColId: null,
     probeNM: 8,             // Dt — total probe concentration in the reaction
+    fragment: "",           // which DNA fragment this gel titrates (WT, -10 shuffle, ...)
     replicate: "1",
     excluded: {},           // { laneIdx: true }
     showInExport: false,
@@ -597,7 +598,7 @@ function buildWarnings(lanes, ref) {
 // ── CSV export ───────────────────────────────────────────────────────
 
 const CSV_COLUMNS = [
-  "image", "replicate", "lane", "lane_label", "protein_conc_nM", "probe_nM",
+  "image", "fragment", "replicate", "lane", "lane_label", "protein_conc_nM", "probe_nM",
   "species", "row_name",
   "roi_x", "roi_y", "roi_w", "roi_h", "n_pixels",
   "integrated_intensity", "bg_intensity", "net_integrated_intensity",
@@ -623,6 +624,7 @@ function buildCsv() {
     for (const s of rec.species) {
       lines.push([
         state.filename,
+        q.fragment,
         q.replicate,
         rec.label,                       // 1-based: matches what the gel shows
         rec.label,
@@ -651,13 +653,27 @@ function buildCsv() {
   return lines.join("\n") + "\n";
 }
 
+// Filename-safe fragment label. Mirrors compare.safe_name() in the
+// fitter so a fragment's exported CSV and its figures share a spelling.
+function safeName(s) {
+  return String(s).trim().replace(/[^A-Za-z0-9._+-]+/g, "_").replace(/^_+|_+$/g, "");
+}
+
 function exportCsv() {
   const csv = buildCsv();
   if (!csv) return setStatus("Nothing to export — click Measure first.", true);
+  const q = st();
   const stem = (state.filename.replace(/\.[^.]+$/, "") || "femsa");
-  const name = `${stem}_rep${st().replicate || "1"}_quant.csv`;
+  // The fragment goes in the filename as well as the CSV, so a folder of
+  // exports is legible at a glance. It is never the FIRST thing in the
+  // name: "-10_shuffle..." would start with a dash and look like a
+  // command-line option to every shell tool.
+  const frag = safeName(q.fragment);
+  const name = `${stem}${frag ? "_" + frag : ""}_rep${safeName(q.replicate) || "1"}_quant.csv`;
   download(new Blob([csv], { type: "text/csv" }), name);
-  setStatus(`Exported ${name}. Fit it with:  femsa-fit ${name}`);
+  setStatus(q.fragment
+    ? `Exported ${name}. Compare fragments with:  femsa-fit *_quant.csv`
+    : `Exported ${name} with no Fragment name — set one before exporting if you will compare fragments.`);
 }
 
 // ── Panel ────────────────────────────────────────────────────────────
@@ -685,6 +701,7 @@ function refreshPanel() {
   if (!q.active) return;
 
   $("q-probe").value = q.probeNM;
+  $("q-fragment").value = q.fragment || "";
   $("q-replicate").value = q.replicate;
   $("q-uniform").checked = !!q.uniformWidth;
   $("q-inset").value = q.insetPct;
@@ -917,6 +934,10 @@ function initPanel() {
     st().probeNM = Number(e.target.value) || 0;
     refreshPanel();
     commitHistory("Set probe concentration");
+  });
+  $("q-fragment").addEventListener("change", (e) => {
+    st().fragment = e.target.value.trim();
+    commitHistory("Set fragment name");
   });
   $("q-replicate").addEventListener("change", (e) => {
     st().replicate = e.target.value.trim() || "1";

@@ -58,6 +58,10 @@ ALIASES: dict[str, tuple[str, ...]] = {
     "saturated":  ("saturated", "issaturated", "saturation", "satflag"),
     "excluded":   ("excluded", "exclude", "skip", "omit"),
     "replicate":  ("replicate", "rep", "biologicalreplicate", "prep", "experiment"),
+    # Which DNA fragment (WT, -10 shuffle, ...) the titration used. Bare
+    # "probe" is deliberately absent: it already means probe CONCENTRATION.
+    "fragment":   ("fragment", "fragmentname", "construct", "probename", "probeid",
+                   "variant", "oligo", "dnafragment"),
     "ifree":      ("ifree", "free", "freeintensity", "unbound", "iunbound",
                    "freeprobe", "netfree", "freenet"),
     "ibound":     ("ibound", "bound", "boundintensity", "shifted", "ishifted",
@@ -142,6 +146,7 @@ class Replicate:
     name: str
     source: Path
     probe_nm: float
+    fragment: str = ""             # "" = unlabeled
     points: list[Point] = field(default_factory=list)
     has_depletion: bool = False
     reference_conc: float = math.nan
@@ -272,8 +277,17 @@ def _load_fraction_form(rows: list[dict], cols: dict[str, str]) -> list[Point]:
     return pts
 
 
-def load_csv(path: Path, default_probe_nm: float) -> list[Replicate]:
-    """Read one CSV into one Replicate per distinct ``replicate`` value."""
+def load_csv(
+    path: Path,
+    default_probe_nm: float,
+    fragment: str | None = None,
+) -> list[Replicate]:
+    """Read one CSV into one Replicate per distinct (fragment, replicate).
+
+    ``fragment``, when given, labels every row in the file and overrides
+    any fragment column — it is how a CSV exported before fragments
+    existed (or one from Fiji) gets a name on the command line.
+    """
     with open(path, newline="", encoding="utf-8-sig") as fh:
         reader = csv.DictReader(fh)
         header = reader.fieldnames or []
@@ -289,24 +303,32 @@ def load_csv(path: Path, default_probe_nm: float) -> list[Replicate]:
             f"protein_conc_nM / protein / conc / Pt. Header was: {', '.join(header)}"
         )
 
-    # Split by replicate first so a single pooled CSV still gets
-    # per-replicate fits, which is the whole point of the spec's
-    # "fit each replicate independently" rule.
+    # Split by (fragment, replicate) first so a single pooled CSV still
+    # gets per-replicate fits — the spec's "fit each replicate
+    # independently" rule — and so two fragments that were both run as
+    # "replicate 1" stay two separate titrations. Grouping by fragment
+    # before computing f_depletion also matters: each fragment needs its
+    # own 0 nM reference lane.
     rep_col = cols.get("replicate")
-    groups: dict[str, list[dict]] = {}
+    frag_col = cols.get("fragment")
+    groups: dict[tuple[str, str], list[dict]] = {}
     for r in rows:
-        key = (str(r.get(rep_col, "")).strip() if rep_col else "") or path.stem
-        groups.setdefault(key, []).append(r)
+        name = (str(r.get(rep_col, "")).strip() if rep_col else "") or path.stem
+        if fragment is not None:
+            frag = fragment.strip()
+        else:
+            frag = str(r.get(frag_col, "")).strip() if frag_col else ""
+        groups.setdefault((frag, name), []).append(r)
 
     out: list[Replicate] = []
-    for name, grows in groups.items():
+    for (frag, name), grows in groups.items():
         probe = default_probe_nm
         if "probe" in cols:
             v = _num(grows[0], cols["probe"])
             if math.isfinite(v) and v > 0:
                 probe = v
 
-        rep = Replicate(name=name, source=path, probe_nm=probe)
+        rep = Replicate(name=name, source=path, probe_nm=probe, fragment=frag)
 
         if "species" in cols and ("net" in cols or "raw" in cols):
             pts = _load_roi_form(grows, cols, rep)
@@ -338,15 +360,23 @@ def load_csv(path: Path, default_probe_nm: float) -> list[Replicate]:
     return out
 
 
-def load_all(paths: list[Path], default_probe_nm: float) -> list[Replicate]:
+def load_all(
+    paths: list[Path],
+    default_probe_nm: float,
+    fragments: list[str | None] | None = None,
+) -> list[Replicate]:
+    """Load every file. ``fragments[i]``, if not None, labels ``paths[i]``."""
+    labels = fragments or [None] * len(paths)
     reps: list[Replicate] = []
-    for p in paths:
-        reps.extend(load_csv(p, default_probe_nm))
-    # Disambiguate identically-named replicates coming from different
-    # files (e.g. three gels each with replicate "1" in the CSV).
-    seen: dict[str, int] = {}
-    for r in reps:
-        if sum(1 for x in reps if x.name == r.name) > 1:
-            seen[r.name] = seen.get(r.name, 0) + 1
+    for p, label in zip(paths, labels):
+        reps.extend(load_csv(p, default_probe_nm, fragment=label))
+    # Disambiguate identically-named replicates of the SAME fragment coming
+    # from different files (three WT gels each exported as replicate "1").
+    # The same replicate id on different fragments is not a collision —
+    # "WT rep 1" and "-10 shuffle rep 1" are routinely the same protein
+    # prep run against two probes.
+    keys = [(r.fragment, r.name) for r in reps]
+    for r, key in zip(reps, keys):
+        if keys.count(key) > 1:
             r.name = f"{r.source.stem}:{r.name}"
     return reps

@@ -188,6 +188,11 @@
                  title="Total probe concentration in the binding reaction (Dt). Recorded in the CSV and used by the quadratic fit." />
         </div>
         <div class="q-field">
+          <label for="q-fragment">Fragment</label>
+          <input type="text" id="q-fragment" value="" placeholder="e.g. WT, -10 shuffle"
+                 title="Which DNA fragment this gel titrates. Written into the CSV so femsa-fit can group replicates by fragment and compare Kd across fragments." />
+        </div>
+        <div class="q-field">
           <label for="q-replicate">Replicate</label>
           <input type="text" id="q-replicate" value="1"
                  title="Identifier for this biological replicate. Each replicate is fitted independently." />
