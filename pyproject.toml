@@ -85,6 +85,8 @@ femsa-fit = "gel_annotator.fit.cli:main"
 dev = ["pytest>=7.0"]
 
 [project.urls]
+Homepage = "https://github.com/chipashvili/EMSA-quant"
+Repository = "https://github.com/chipashvili/EMSA-quant"
 Upstream = "https://github.com/billy-ngo/slots-gel-annotator"
 
 [tool.setuptools.packages.find]
